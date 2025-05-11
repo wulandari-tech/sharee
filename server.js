@@ -1,19 +1,18 @@
 require('dotenv').config();
-
 const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
-const MongoStore = require('connect-mongo');
 const flash = require('connect-flash');
 const path = require('path');
+const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
-
+const MongoStore = require('connect-mongo');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('MongoDB Terhubung'))
-  .catch(err => console.error('Kesalahan Koneksi MongoDB:', err));
+  .then(() => console.log('MongoDB Connected'))
+  .catch(err => console.error('MongoDB Connection Error:', err));
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -27,21 +26,12 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
-  saveUninitialized: false,
-  store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI,
-    collectionName: 'sesi_aplikasi_kode_v2' // Ganti nama koleksi jika perlu
-  }),
-  cookie: {
-    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 hari
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-  }
+  saveUninitialized: true,
+  cookie: { maxAge: 24 * 60 * 60 * 1000 } // 1 day
 }));
 
 app.use(flash());
@@ -50,48 +40,27 @@ app.use((req, res, next) => {
   res.locals.currentUser = req.session.user;
   res.locals.success_msg = req.flash('success_msg');
   res.locals.error_msg = req.flash('error_msg');
-  res.locals.errors = req.flash('errors');
   res.locals.query = req.query;
-  res.locals.currentPath = req.path;
-  res.locals.process = process;
   next();
 });
 
 const indexRoutes = require('./routes/index');
-const authModule = require('./routes/auth'); // Impor seluruh modul auth
+const authRoutes = require('./routes/auth');
 const codeRoutes = require('./routes/code');
 
 app.use('/', indexRoutes);
-app.use('/auth', authModule.router); // Gunakan router dari authModule
+app.use('/auth', authRoutes);
 app.use('/code', codeRoutes);
 
 app.use((req, res, next) => {
-  res.status(404).render('404', { title: '404 - Halaman Tidak Ditemukan' });
+  res.status(404).render('404');
 });
 
 app.use((err, req, res, next) => {
-  console.error("Global Error Handler:", err.message, err.stack);
-  if (res.headersSent) {
-    return next(err);
-  }
-  const statusCode = err.status || 500;
-  const message = err.message || 'Terjadi kesalahan internal pada server.';
-  
-  if (req.xhr || req.headers.accept.indexOf('json') > -1) {
-    return res.status(statusCode).json({ error: message });
-  }
-
-  req.flash('error_msg', message);
-  if (statusCode === 500 && process.env.NODE_ENV !== 'development') {
-    return res.status(500).render('500', { title: 'Kesalahan Server'});
-  }
-  // Untuk error selain 500 atau di development, bisa redirect atau render halaman error spesifik
-  res.status(statusCode).render('500', {
-      title: `Kesalahan ${statusCode}`,
-      error: process.env.NODE_ENV === 'development' ? err : { message }
-  });
+  console.error(err.stack);
+  res.status(500).send('Something broke!');
 });
 
 app.listen(PORT, () => {
-  console.log(`Server berjalan di http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });

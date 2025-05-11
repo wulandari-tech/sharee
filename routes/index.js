@@ -1,58 +1,57 @@
 const express = require('express');
 const router = express.Router();
-const Code = require('../models/code'); // Pastikan path benar
+const Code = require('../models/code');
+
+const ITEMS_PER_PAGE = 10;
 
 router.get('/', async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = 9; // Jumlah item per halaman
-  const searchQuery = req.query.search || '';
-  const languageQuery = req.query.language || '';
-  const tagQuery = req.query.tag || '';
-
-  let queryOptions = {};
-  const sortOptions = { createdAt: -1 }; // Default sort
-
-  if (searchQuery) {
-    queryOptions.$text = { $search: searchQuery };
-    // Jika menggunakan MongoDB Atlas, Anda bisa menambahkan score untuk sorting relevansi
-    // sortOptions.score = { $meta: "textScore" };
-  }
-  if (languageQuery) {
-    queryOptions.programmingLanguage = languageQuery; // Filter berdasarkan programmingLanguage
-  }
-  if (tagQuery) {
-    queryOptions.tags = tagQuery.toLowerCase();
-  }
-
   try {
-    const codes = await Code.find(queryOptions)
-      .populate('author', 'username') // Ambil username author
-      .sort(sortOptions)
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
+    const page = parseInt(req.query.page) || 1;
+    const searchQuery = req.query.search || '';
+    const langQuery = req.query.language || '';
+    const tagQuery = req.query.tag || '';
 
-    const totalCodes = await Code.countDocuments(queryOptions);
-    // Ambil daftar bahasa unik untuk filter, kecuali 'file'
-    const distinctLanguages = await Code.distinct('programmingLanguage');
-    const languagesForFilter = distinctLanguages.filter(lang => lang && lang !== 'file').sort();
+    let query = {};
+    if (searchQuery) {
+      query.$or = [
+        { title: { $regex: searchQuery, $options: 'i' } },
+        { description: { $regex: searchQuery, $options: 'i' } }
+      ];
+    }
+    if (langQuery) {
+      query.language = langQuery;
+    }
+    if (tagQuery) {
+      query.tags = tagQuery.toLowerCase();
+    }
 
+    const totalCodes = await Code.countDocuments(query);
+    const codes = await Code.find(query)
+      .populate('author', 'username')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * ITEMS_PER_PAGE)
+      .limit(ITEMS_PER_PAGE);
+
+    const languages = await Code.distinct('language');
 
     res.render('index', {
-      title: 'Beranda - SHARECODE',
       codes,
+      languages,
       currentPage: page,
-      hasNextPage: limit * page < totalCodes,
+      hasNextPage: ITEMS_PER_PAGE * page < totalCodes,
       hasPreviousPage: page > 1,
       nextPage: page + 1,
       previousPage: page - 1,
-      lastPage: Math.ceil(totalCodes / limit),
-      languages: languagesForFilter,
+      lastPage: Math.ceil(totalCodes / ITEMS_PER_PAGE),
+      searchQuery,
+      langQuery,
+      tagQuery,
+      title: 'Beranda - SHARE SOURCE CODE'
     });
-  } catch (error) {
-    console.error("Error di halaman utama:", error);
-    req.flash('error_msg', 'Gagal memuat daftar kode.');
-    res.render('index', { title: 'Beranda - SHARECODE', codes: [], languages: [] }); // Tampilkan halaman kosong jika error
+  } catch (err) {
+    console.error(err);
+    req.flash('error_msg', 'Gagal memuat kode.');
+    res.redirect('/');
   }
 });
 
