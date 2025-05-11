@@ -95,7 +95,6 @@ router.post('/upload', isLoggedIn, upload.single('file'), async (req, res) => {
 
   try {
   const newCode = new Code(codeData);
-  console.log('DATA YANG AKAN DISIMPAN:', codeData);
   await newCode.save();
   req.flash('success_msg', 'Kode/File berhasil diunggah!');
   res.redirect(`/code/view/${newCode._id}`);
@@ -198,7 +197,7 @@ router.post('/edit/:id', isLoggedIn, isAuthor, upload.single('file'), async (req
         }
     }
 
-console.log('DATA YANG AKAN DISIMPAN:', codeData);
+
     await code.save();
     req.flash('success_msg', 'Kode berhasil diperbarui!');
     res.redirect(`/code/view/${code._id}`);
