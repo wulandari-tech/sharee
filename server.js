@@ -28,10 +28,10 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(session({
-  secret: process.env.SESSION_SECRET,
+  secret: 'rahasia_anda',
   resave: false,
-  saveUninitialized: true,
-  cookie: { maxAge: 24 * 60 * 60 * 1000 } // 1 day
+  saveUninitialized: false,
+  store: MongoStore.create({ mongoUrl: 'mongodb+srv://zanssxploit:pISqUYgJJDfnLW9b@cluster0.fgram.mongodb.net/diskusi_db?retryWrites=true&w=majority' })
 }));
 
 app.use(flash());

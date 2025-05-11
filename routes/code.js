@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const axios = require('axios');
+const mongoose = require('mongoose');
 const Code = require('../models/code');
 const Comment = require('../models/comment');
 const { isLoggedIn, isAuthor } = require('../middleware/authMiddleware');
@@ -20,7 +21,7 @@ const upload = multer({
     ) {
       cb(null, true);
     } else {
-      cb(new Error('Jenis file tidak didukung. Hanya ZIP, text, atau gambar.'), false);
+      cb(new Error('Jenis file tidak didukung.'), false);
     }
   }
 });
@@ -47,24 +48,24 @@ router.post('/upload', isLoggedIn, upload.single('file'), async (req, res) => {
     const verificationURL = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${recaptchaResponse}&remoteip=${req.connection.remoteAddress}`;
     const recaptchaVerifyResponse = await axios.post(verificationURL);
     if (!recaptchaVerifyResponse.data.success) {
-      req.flash('error_msg', 'Verifikasi reCAPTCHA gagal. Coba lagi.');
+      req.flash('error_msg', 'Verifikasi reCAPTCHA gagal.');
       return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: formData });
     }
   } catch (error) {
-    console.error("reCAPTCHA verification error:", error);
-    req.flash('error_msg', 'Terjadi kesalahan saat verifikasi reCAPTCHA.');
+    console.error("reCAPTCHA error:", error);
+    req.flash('error_msg', 'Kesalahan saat verifikasi.');
     return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: formData });
   }
 
   if (!title || (!content && !req.file)) {
-    req.flash('error_msg', 'Judul dan Konten Kode atau File harus diisi.');
+    req.flash('error_msg', 'Judul dan konten/file harus diisi.');
     return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: formData });
   }
 
   const codeData = {
     title,
     description,
-    language: content ? language : (req.file ? 'file' : 'plaintext'),
+    language: content ? language : (req.file ? 'file' : 'plain'), // GANTI plaintext jadi plain
     content: content || '',
     author: req.session.user.id,
     tags: formData.tags
@@ -86,21 +87,21 @@ router.post('/upload', isLoggedIn, upload.single('file'), async (req, res) => {
       codeData.filename = req.file.originalname;
       if (!content) codeData.content = `File: ${req.file.originalname}`;
     } catch (err) {
-      console.error('Cloudinary upload error:', err);
-      req.flash('error_msg', 'Gagal mengunggah file ke Cloudinary.');
-      return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: formData });
+      console.error('Cloudinary error:', err);
+      req.flash('error_msg', 'Gagal unggah file.');
+      return res.render('upload', { title: 'Upload Kode/File', code: formData });
     }
   }
 
   try {
     const newCode = new Code(codeData);
     await newCode.save();
-    req.flash('success_msg', 'Kode/File berhasil diunggah!');
+    req.flash('success_msg', 'Berhasil diunggah!');
     res.redirect(`/code/view/${newCode._id}`);
   } catch (err) {
     console.error(err);
-    req.flash('error_msg', 'Gagal menyimpan kode/file.');
-    res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: formData });
+    req.flash('error_msg', 'Gagal menyimpan.');
+    res.render('upload', { title: 'Upload Kode/File', code: formData });
   }
 });
 

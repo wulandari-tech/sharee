@@ -12,12 +12,12 @@ const CodeSchema = new mongoose.Schema({
   },
   content: {
     type: String,
-    required: function() { return !this.fileurl; }
+    required: function () { return !this.fileurl; }
   },
   language: {
-  type: String,
-  default: 'plain'
-},
+    type: String,
+    default: 'plain' // GANTI dari 'plaintext' ke 'plain'
+  },
   tags: [{
     type: String,
     trim: true,
@@ -28,17 +28,17 @@ const CodeSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  fileurl: { // For ZIP files or other direct file uploads (Cloudinary URL)
+  fileurl: {
     type: String
   },
-  filename: { // Original name of the uploaded file
+  filename: {
     type: String
   },
   likes: {
     type: Number,
     default: 0
   },
-  likedBy: [{ // Store user IDs who liked this
+  likedBy: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
@@ -52,7 +52,7 @@ const CodeSchema = new mongoose.Schema({
   }
 });
 
-CodeSchema.pre('save', function(next) {
+CodeSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
 });
