@@ -94,7 +94,7 @@
 
         <div>
           <label for="tags" class="form-label">Tags (Pisahkan dengan koma)</label>
-          <input type="text" name="tags" id="tags" placeholder="cth: javascript, web, utility" class="form-input" value="<%= code && code.tags ? code.tags.join(', ') : '' %>" />
+          <input type="text" name="tags" id="tags" placeholder="cth: javascript, web, utility" class="form-input" value="<%= Array.isArray(code?.tags) ? code.tags.join(', ') : (code?.tags || '') %>" />
         </div>
 
         <div>

@@ -10,9 +10,14 @@ const { isLoggedIn, isAuthor } = require('../middleware/authMiddleware');
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/zip' || file.mimetype.startsWith('text/') || file.mimetype === 'application/octet-stream' || file.mimetype.startsWith('image/')) {
+    if (
+      file.mimetype === 'application/zip' ||
+      file.mimetype.startsWith('text/') ||
+      file.mimetype === 'application/octet-stream' ||
+      file.mimetype.startsWith('image/')
+    ) {
       cb(null, true);
     } else {
       cb(new Error('Jenis file tidak didukung. Hanya ZIP, text, atau gambar.'), false);
@@ -29,9 +34,12 @@ router.get('/upload', isLoggedIn, (req, res) => {
 router.post('/upload', isLoggedIn, upload.single('file'), async (req, res) => {
   const { title, description, language, content, tags, 'g-recaptcha-response': recaptchaResponse } = req.body;
 
+  const formData = { ...req.body };
+  formData.tags = tags ? tags.split(',').map(tag => tag.trim().toLowerCase()) : [];
+
   if (!recaptchaResponse) {
     req.flash('error_msg', 'Mohon verifikasi reCAPTCHA');
-    return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: req.body });
+    return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: formData });
   }
 
   try {
@@ -39,18 +47,18 @@ router.post('/upload', isLoggedIn, upload.single('file'), async (req, res) => {
     const verificationURL = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${recaptchaResponse}&remoteip=${req.connection.remoteAddress}`;
     const recaptchaVerifyResponse = await axios.post(verificationURL);
     if (!recaptchaVerifyResponse.data.success) {
-        req.flash('error_msg', 'Verifikasi reCAPTCHA gagal. Coba lagi.');
-        return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: req.body });
+      req.flash('error_msg', 'Verifikasi reCAPTCHA gagal. Coba lagi.');
+      return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: formData });
     }
   } catch (error) {
-      console.error("reCAPTCHA verification error:", error);
-      req.flash('error_msg', 'Terjadi kesalahan saat verifikasi reCAPTCHA.');
-      return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: req.body });
+    console.error("reCAPTCHA verification error:", error);
+    req.flash('error_msg', 'Terjadi kesalahan saat verifikasi reCAPTCHA.');
+    return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: formData });
   }
 
   if (!title || (!content && !req.file)) {
     req.flash('error_msg', 'Judul dan Konten Kode atau File harus diisi.');
-    return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: req.body });
+    return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: formData });
   }
 
   const codeData = {
@@ -59,7 +67,7 @@ router.post('/upload', isLoggedIn, upload.single('file'), async (req, res) => {
     language: content ? language : (req.file ? 'file' : 'plaintext'),
     content: content || '',
     author: req.session.user.id,
-    tags: tags ? tags.split(',').map(tag => tag.trim().toLowerCase()) : []
+    tags: formData.tags
   };
 
   if (req.file) {
@@ -76,11 +84,11 @@ router.post('/upload', isLoggedIn, upload.single('file'), async (req, res) => {
       });
       codeData.fileurl = result.secure_url;
       codeData.filename = req.file.originalname;
-      if (!content) codeData.content = `File: ${req.file.originalname}`; // Placeholder if only file
+      if (!content) codeData.content = `File: ${req.file.originalname}`;
     } catch (err) {
       console.error('Cloudinary upload error:', err);
       req.flash('error_msg', 'Gagal mengunggah file ke Cloudinary.');
-      return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: req.body });
+      return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: formData });
     }
   }
 
@@ -92,7 +100,7 @@ router.post('/upload', isLoggedIn, upload.single('file'), async (req, res) => {
   } catch (err) {
     console.error(err);
     req.flash('error_msg', 'Gagal menyimpan kode/file.');
-    res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: req.body });
+    res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: formData });
   }
 });
 
