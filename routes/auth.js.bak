@@ -1,0 +1,158 @@
+const express = require('express');
+const router = express.Router(); // Pastikan router didefinisikan
+const User = require('../models/user');
+const axios = require('axios');
+
+// Middleware untuk proteksi rute
+const ensureAuthenticated = (req, res, next) => {
+  if (req.session.user) {
+    return next();
+  }
+  req.flash('error_msg', 'Silakan login untuk mengakses halaman ini.');
+  const currentFullUrl = encodeURIComponent(req.originalUrl || req.url); // Pastikan URL redirect benar
+  res.redirect(`/auth/login?redirect=${currentFullUrl}`);
+};
+
+const ensureGuest = (req, res, next) => {
+  if (req.session.user) {
+    res.redirect('/'); // Atau ke dashboard pengguna
+  } else {
+    return next();
+  }
+};
+
+// ... (Rute GET /register, POST /register, GET /login, POST /login, GET /logout) ...
+// Pastikan semua rute Anda didefinisikan di sini menggunakan router.get, router.post, dll.
+
+// GET Halaman Register
+router.get('/register', ensureGuest, (req, res) => {
+  res.render('register', { title: 'Register Akun' });
+});
+
+// POST Proses Register
+router.post('/register', ensureGuest, async (req, res) => {
+  const { username, email, password, password2 } = req.body;
+  const recaptchaResponse = req.body['g-recaptcha-response'];
+  let errors = [];
+
+  if (!username || !email || !password || !password2) {
+    errors.push({ msg: 'Harap isi semua field yang wajib.' });
+  }
+  if (password !== password2) {
+    errors.push({ msg: 'Konfirmasi password tidak cocok.' });
+  }
+  if (password.length < 6) {
+    errors.push({ msg: 'Password minimal 6 karakter.' });
+  }
+  if (!recaptchaResponse && process.env.NODE_ENV !== 'test') { // Jangan periksa captcha jika sedang testing
+    errors.push({ msg: 'Harap verifikasi reCAPTCHA.' });
+  }
+
+  if (errors.length > 0) {
+    // Menggunakan connect-flash untuk menampilkan error
+    errors.forEach(err => req.flash('error_msg', err.msg));
+    return res.render('register', {
+      title: 'Register Akun',
+      // errors: errors, // errors sudah dihandle oleh res.locals.error_msg
+      username: username, // Untuk mengisi kembali form
+      email: email
+    });
+  }
+
+  try {
+    if (process.env.NODE_ENV !== 'test') { // Jangan periksa captcha jika sedang testing
+        const recaptchaVerifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${recaptchaResponse}&remoteip=${req.ip}`;
+        const recaptchaResult = await axios.post(recaptchaVerifyUrl);
+
+        if (!recaptchaResult.data.success) {
+          req.flash('error_msg', 'Verifikasi reCAPTCHA gagal. Silakan coba lagi.');
+          return res.redirect('/auth/register');
+        }
+    }
+
+    const existingUserByEmail = await User.findOne({ email: email.toLowerCase() });
+    if (existingUserByEmail) {
+      req.flash('error_msg', 'Email sudah terdaftar.');
+      return res.render('register', { title: 'Register Akun', username, email });
+    }
+    const existingUserByUsername = await User.findOne({ username: username.toLowerCase() });
+     if (existingUserByUsername) {
+      req.flash('error_msg', 'Username sudah terdaftar.');
+      return res.render('register', { title: 'Register Akun', username, email });
+    }
+
+
+    const newUser = new User({ username, email, password });
+    await newUser.save();
+    req.flash('success_msg', 'Registrasi berhasil! Silakan login.');
+    res.redirect('/auth/login');
+
+  } catch (error) {
+    console.error("Error registrasi:", error);
+    req.flash('error_msg', 'Terjadi kesalahan saat registrasi.');
+    res.render('register', { title: 'Register Akun', username, email });
+  }
+});
+
+// GET Halaman Login
+router.get('/login', ensureGuest, (req, res) => {
+  res.render('login', { title: 'Login Akun' });
+});
+
+// POST Proses Login
+router.post('/login', ensureGuest, async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    req.flash('error_msg', 'Harap isi email dan password.');
+    return res.redirect('/auth/login');
+  }
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      req.flash('error_msg', 'Email tidak terdaftar.');
+      return res.redirect('/auth/login');
+    }
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) {
+      req.flash('error_msg', 'Password salah.');
+      return res.redirect('/auth/login');
+    }
+    req.session.user = { // Simpan hanya informasi yang diperlukan dan tidak sensitif
+      _id: user._id,
+      id: user._id.toString(),
+      username: user.username,
+      email: user.email
+      // Jangan simpan seluruh objek user jika mengandung data sensitif atau terlalu besar
+    };
+    const redirectUrl = req.query.redirect || '/';
+    req.flash('success_msg', 'Login berhasil!');
+    res.redirect(redirectUrl);
+  } catch (error) {
+    console.error("Error login:", error);
+    req.flash('error_msg', 'Terjadi kesalahan saat login.');
+    res.redirect('/auth/login');
+  }
+});
+
+// GET Logout
+router.get('/logout', ensureAuthenticated, (req, res, next) => { // Tambahkan next untuk error handling
+  req.session.destroy(err => {
+    if (err) {
+      console.error("Error saat logout:", err);
+      req.flash('error_msg', 'Gagal logout.');
+      // return res.redirect('/'); // Hindari redirect di sini jika ingin ditangani oleh error handler global
+      return next(err); // Serahkan ke error handler global
+    }
+    res.clearCookie('connect.sid'); // Nama cookie default express-session
+    req.flash('success_msg', 'Anda berhasil logout.');
+    res.redirect('/auth/login');
+  });
+});
+
+
+// Ekspor router DAN middleware secara terpisah jika dibutuhkan di file lain
+module.exports = {
+    router: router, // Ini adalah router utama untuk /auth
+    ensureAuthenticated: ensureAuthenticated,
+    ensureGuest: ensureGuest
+};
