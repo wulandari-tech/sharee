@@ -14,9 +14,10 @@ const CodeSchema = new mongoose.Schema({
     type: String,
     required: function () { return !this.fileurl; }
   },
-  language: {
+  kayaknya gini ntah lah
+language: {
   type: String,
-  enum: ['plain', 'file', 'html', 'css', 'js'],
+  enum: ['plain', 'file', 'html', 'css', 'js', 'htmlmixed'],
   default: 'plain'
 },
   tags: [{
