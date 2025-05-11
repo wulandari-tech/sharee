@@ -17,7 +17,7 @@ const CodeSchema = new mongoose.Schema({
 language: {
   type: String,
   enum: ['plain', 'file', 'html', 'css', 'js', 'htmlmixed'],
-  default: 'plain'
+  default: 'html'
 },
   tags: [{
     type: String,
