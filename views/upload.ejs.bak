@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/meta.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/mode/loadmode.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #111827; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    .CodeMirror {
+      height: 350px;
+      background-color: #1f2937; /* bg-gray-800 */
+      color: white;
+      border-radius: 0.375rem; /* rounded-md */
+      border: 1px solid #4b5563; /* border-gray-600 */
+      font-size: 0.9rem;
+    }
+    .form-input, .form-select, .form-textarea {
+      @apply w-full p-3 rounded-md bg-gray-800 border border-gray-700 text-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow placeholder-gray-500;
+    }
+    .form-label {
+      @apply block text-sm font-medium text-indigo-300 mb-1;
+    }
+    .file-input-styled::-webkit-file-upload-button {
+      @apply bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-md cursor-pointer mr-3 transition-colors;
+      visibility: hidden;
+    }
+    .file-input-styled::before {
+      content: 'Pilih File (ZIP, Teks, Gambar)';
+      @apply bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-md cursor-pointer mr-3 transition-colors inline-block;
+    }
+    .file-input-styled:hover::before {
+      @apply bg-indigo-700;
+    }
+     .file-input-styled {
+      @apply text-gray-400;
+    }
+  </style>
+</head>
+<body class="text-gray-200 min-h-screen">
+  <%- include('partials/_navbar') %>
+  <%- include('partials/_messages') %>
+
+  <div class="max-w-3xl mx-auto p-6 md:p-10 mt-8">
+    <div class="bg-gray-800 shadow-2xl rounded-xl p-6 md:p-8 border border-gray-700">
+      <h1 class="text-3xl font-bold text-indigo-400 mb-8 text-center">
+        <i class="fas fa-cloud-upload-alt mr-2"></i> <%= code ? 'Edit Kode/File' : 'Unggah Kode/File Baru' %>
+      </h1>
+      
+      <form id="uploadForm" action="<%= code ? '/code/edit/' + code._id : '/code/upload' %>" method="POST" enctype="multipart/form-data" class="space-y-6">
+        <div>
+          <label for="title" class="form-label">Judul <span class="text-red-500">*</span></label>
+          <input type="text" name="title" id="title" placeholder="Judul snippet atau file Anda" required class="form-input" value="<%= code ? code.title : '' %>" />
+        </div>
+        
+        <div>
+          <label for="description" class="form-label">Deskripsi</label>
+          <textarea name="description" id="description" placeholder="Jelaskan tentang kode atau file ini" class="form-textarea h-24"><%= code ? code.description : '' %></textarea>
+        </div>
+        
+        <div>
+          <label for="language-select" class="form-label">Bahasa Pemrograman (Jika mengunggah kode)</label>
+          <select name="language" id="language-select" class="form-select">
+            <option value="plaintext" <%= code && code.language === 'plaintext' ? 'selected' : '' %>>Plain Text</option>
+            <option value="htmlmixed" <%= code && code.language === 'htmlmixed' ? 'selected' : '' %>>HTML</option>
+            <option value="css" <%= code && code.language === 'css' ? 'selected' : '' %>>CSS</option>
+            <option value="javascript" <%= code && code.language === 'javascript' ? 'selected' : '' %>>JavaScript</option>
+            <option value="python" <%= code && code.language === 'python' ? 'selected' : '' %>>Python</option>
+            <option value="text/x-java" <%= code && code.language === 'text/x-java' ? 'selected' : '' %>>Java</option>
+            <option value="text/x-csrc" <%= code && code.language === 'text/x-csrc' ? 'selected' : '' %>>C</option>
+            <option value="text/x-c++src" <%= code && code.language === 'text/x-c++src' ? 'selected' : '' %>>C++</option>
+            <option value="php" <%= code && code.language === 'php' ? 'selected' : '' %>>PHP</option>
+            <option value="ruby" <%= code && code.language === 'ruby' ? 'selected' : '' %>>Ruby</option>
+            <option value="go" <%= code && code.language === 'go' ? 'selected' : '' %>>Go</option>
+            <option value="rust" <%= code && code.language === 'rust' ? 'selected' : '' %>>Rust</option>
+            <option value="sql" <%= code && code.language === 'sql' ? 'selected' : '' %>>SQL</option>
+             <option value="markdown" <%= code && code.language === 'markdown' ? 'selected' : '' %>>Markdown</option>
+          </select>
+        </div>
+        
+        <div>
+            <label for="code-editor" class="form-label">Konten Kode (Opsional jika mengunggah file)</label>
+            <textarea name="content" id="real-content" hidden><%= code && code.content && code.language !== 'file' ? code.content : '' %></textarea>
+            <textarea id="code-editor" class="w-full p-3 rounded bg-gray-800 border border-gray-700"><%= code && code.content && code.language !== 'file' ? code.content : '' %></textarea>
+        </div>
+
+        <div>
+          <label for="tags" class="form-label">Tags (Pisahkan dengan koma)</label>
+          <input type="text" name="tags" id="tags" placeholder="cth: javascript, web, utility" class="form-input" value="<%= code && code.tags ? code.tags.join(', ') : '' %>" />
+        </div>
+
+        <div>
+          <label for="file" class="form-label">Unggah File (ZIP, Teks, Gambar - Opsional jika mengisi Konten Kode)</label>
+          <input type="file" name="file" id="file" class="file-input-styled w-full" />
+           <% if (code && code.fileurl) { %>
+            <p class="text-sm text-gray-400 mt-2">File saat ini: <a href="<%= code.fileurl %>" target="_blank" class="text-indigo-400 hover:underline"><%= code.filename %></a></p>
+            <label class="mt-1 inline-flex items-center">
+                <input type="checkbox" name="remove_file" value="true" class="form-checkbox h-4 w-4 text-indigo-600 border-gray-600 rounded bg-gray-700 focus:ring-indigo-500">
+                <span class="ml-2 text-gray-300 text-sm">Hapus file saat ini</span>
+            </label>
+          <% } %>
+        </div>
+        
+        <% if (!code) { %> 
+          <div class="g-recaptcha" data-sitekey="<%= process.env.RECAPTCHA_SITE_KEY %>" data-theme="dark"></div>
+        <% } %>
+
+        <button id="submitBtn" type="submit" class="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-bold px-6 py-3 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 shadow-lg">
+          <i class="fas <%= code ? 'fa-save' : 'fa-upload' %> mr-2"></i> <%= code ? 'Simpan Perubahan' : 'Unggah Sekarang' %>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <%- include('partials/_footer') %>
+
+  <script>
+    CodeMirror.modeURL = "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/%N/%N.min.js";
+    const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
+      lineNumbers: true,
+      theme: "material-darker",
+      mode: document.getElementById("language-select").value || "plaintext",
+      autoCloseBrackets: true,
+      matchBrackets: true,
+    });
+
+    const languageSelect = document.getElementById("language-select");
+    languageSelect.addEventListener("change", function () {
+      let mode = this.value;
+      let spec = null;
+      let info = CodeMirror.findModeByMIME(mode);
+      if (info) {
+        spec = info.mode;
+        mode = info.mime;
+      } else {
+         info = CodeMirror.findModeByName(mode);
+         if (info) {
+            spec = info.mode;
+            mode = info.mime || info.mode;
+         } else {
+            // Fallback for simple names like 'html', 'css' if not directly MIME types
+            const modeMap = {
+                'html': 'htmlmixed', 'javascript': 'javascript', 'css': 'css', 'python': 'python',
+                'java': 'text/x-java', 'c': 'text/x-csrc', 'cpp': 'text/x-c++src',
+                'php': 'php', 'ruby': 'ruby', 'go': 'go', 'rust': 'rust', 'sql':'sql', 'markdown':'markdown'
+            };
+            spec = modeMap[mode.toLowerCase()] || 'plaintext';
+            mode = spec; // Use the mapped mode as the new mode
+         }
+      }
+
+      if (spec) {
+        editor.setOption("mode", mode);
+        CodeMirror.autoLoadMode(editor, spec);
+      } else {
+        editor.setOption("mode", "plaintext"); // Fallback
+      }
+    });
+
+    // Trigger change on load if code exists to set initial mode correctly
+    if (editor.getValue()) {
+        languageSelect.dispatchEvent(new Event('change'));
+    }
+
+
+    document.getElementById("uploadForm").addEventListener("submit", function (e) {
+      document.getElementById("real-content").value = editor.getValue();
+      <% if (!code) { %> 
+      const response = grecaptcha.getResponse();
+      if (response.length === 0) {
+        e.preventDefault();
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'fixed top-20 right-5 bg-red-500 text-white p-4 rounded-lg shadow-lg z-50 animate-fadeInOut';
+        alertDiv.textContent = 'Silakan selesaikan reCAPTCHA terlebih dahulu.';
+        document.body.appendChild(alertDiv);
+        setTimeout(() => { alertDiv.remove(); }, 3000);
+      }
+      <% } %>
+    });
+
+    const fileInput = document.getElementById('file');
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            const fileName = this.files[0] ? this.files[0].name : 'Pilih File (ZIP, Teks, Gambar)';
+            const beforeElement = this.parentNode.querySelector('.file-input-styled::before');
+             // This is tricky to update pseudo-element content with JS directly.
+             // A common workaround is to use a data-attribute and CSS content property.
+             // For simplicity here, we'll just log it. In a real app, you might restructure the HTML/CSS for this.
+            console.log("File selected: " + fileName);
+             if(this.files[0]) {
+                this.dataset.fileSelected = fileName; // You can use this with CSS content: attr(data-file-selected)
+             } else {
+                this.dataset.fileSelected = 'Pilih File (ZIP, Teks, Gambar)';
+             }
+        });
+    }
+  </script>
+</body>
+</html>

@@ -1,345 +1,361 @@
+// routes/code.js
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
+const path = require('path');
+const Code = require('../models/code'); 
+// const { ensureAuthenticated } = require('../config/auth'); // Asumsi Anda punya ini
 const cloudinary = require('cloudinary').v2;
-const axios = require('axios');
-const Code = require('../models/code');
-const Comment = require('../models/comment');
-const { isLoggedIn, isAuthor } = require('../middleware/authMiddleware');
+const axios = require('axios'); // Untuk reCAPTCHA
+
+// Middleware dummy jika ensureAuthenticated tidak ada, ganti dengan yang asli
+const ensureAuthenticated = (req, res, next) => {
+  if (req.isAuthenticated ? req.isAuthenticated() : (req.user != null) ) { // Ganti dengan implementasi auth Anda
+    return next();
+  }
+  req.flash('error_msg', 'Silakan login untuk mengakses halaman ini.');
+  res.redirect('/auth/login'); // Ganti dengan rute login Anda
+};
+
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedMimeTypes = [
+    'application/zip', 'application/x-zip-compressed', 'application/octet-stream', // Untuk ZIP
+    'text/plain', 'text/html', 'text/css', 'text/javascript', 'application/json', 'application/xml', 'text/markdown',
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'
+  ];
+  // Ekstensi yang lebih permisif karena mimetype bisa bervariasi
+  const allowedExtensions = /\.(zip|txt|md|html|css|js|json|xml|jpg|jpeg|png|gif|webp|svg|log|java|py|c|cpp|cs|rb|php|go|rs|swift|kt|ts|jsx|vue|conf|ini|yaml|yml|sh|bat|ps1)$/i;
+
+  const isMimeAllowed = allowedMimeTypes.includes(file.mimetype);
+  const isExtAllowed = allowedExtensions.test(path.extname(file.originalname).toLowerCase());
+
+  if (isMimeAllowed || isExtAllowed) { // Cukup salah satu terpenuhi untuk lebih fleksibel
+    cb(null, true);
+  } else {
+    console.warn(`File rejected: originalname='${file.originalname}', mimetype='${file.mimetype}', ext='${path.extname(file.originalname)}'`);
+    const err = new Error('Jenis file tidak didukung. Hanya ZIP, arsip umum, file teks, atau gambar.');
+    err.code = 'LIMIT_FILE_TYPE_CUSTOM';
+    cb(err, false);
+  }
+};
 
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/zip' || file.mimetype.startsWith('text/') || file.mimetype === 'application/octet-stream' || file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Jenis file tidak didukung. Hanya ZIP, text, atau gambar.'), false);
-    }
-  }
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB
+  fileFilter: fileFilter,
 });
 
-const ITEMS_PER_PAGE_MY_SNIPPETS = 8;
-
-router.get('/upload', isLoggedIn, (req, res) => {
-  res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: null });
-});
-
-router.post('/upload', isLoggedIn, upload.single('file'), async (req, res) => {
-  const { title, description, language, content, tags, 'g-recaptcha-response': recaptchaResponse } = req.body;
-
-  if (!recaptchaResponse) {
-    req.flash('error_msg', 'Mohon verifikasi reCAPTCHA');
-    return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: req.body });
-  }
-
+async function verifyRecaptcha(token) {
+  if (!token || !process.env.RECAPTCHA_SECRET_KEY) return false;
   try {
-    const secretKey = process.env.RECAPTCHA_SECRET_KEY;
-    const verificationURL = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${recaptchaResponse}&remoteip=${req.connection.remoteAddress}`;
-    const recaptchaVerifyResponse = await axios.post(verificationURL);
-    if (!recaptchaVerifyResponse.data.success) {
-        req.flash('error_msg', 'Verifikasi reCAPTCHA gagal. Coba lagi.');
-        return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: req.body });
-    }
+    const response = await axios.post(
+      `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${token}`
+    );
+    return response.data.success;
   } catch (error) {
-      console.error("reCAPTCHA verification error:", error);
-      req.flash('error_msg', 'Terjadi kesalahan saat verifikasi reCAPTCHA.');
-      return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: req.body });
+    console.error('reCAPTCHA verification error:', error);
+    return false;
   }
+}
 
-  if (!title || (!content && !req.file)) {
-    req.flash('error_msg', 'Judul dan Konten Kode atau File harus diisi.');
-    return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: req.body });
+// Helper untuk membersihkan dan memformat tags
+function parseTags(tagsString) {
+  if (tagsString && typeof tagsString === 'string' && tagsString.trim() !== '') {
+    return tagsString.split(',')
+      .map(tag => tag.trim().toLowerCase())
+      .filter(tag => tag && tag.length > 0 && tag.length <= 25) // Filter tag kosong & batasi panjang
+      .slice(0, 10); // Batasi jumlah tag (misal 10)
   }
+  return [];
+}
 
-  const codeData = {
-    title,
-    description,
-    language: content ? language : (req.file ? 'file' : 'plaintext'),
-    content: content || '',
-    author: req.session.user.id,
-    tags: tags ? tags.split(',').map(tag => tag.trim().toLowerCase()) : []
-  };
-
-  if (req.file) {
-    try {
-      const result = await new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          { resource_type: "auto", folder: "code_share_uploads" },
-          (error, result) => {
-            if (error) reject(error);
-            else resolve(result);
-          }
-        );
-        uploadStream.end(req.file.buffer);
-      });
-      codeData.fileurl = result.secure_url;
-      codeData.filename = req.file.originalname;
-      if (!content) codeData.content = `File: ${req.file.originalname}`; // Placeholder if only file
-    } catch (err) {
-      console.error('Cloudinary upload error:', err);
-      req.flash('error_msg', 'Gagal mengunggah file ke Cloudinary.');
-      return res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: req.body });
-    }
-  }
-
-  try {
-    const newCode = new Code(codeData);
-    await newCode.save();
-    req.flash('success_msg', 'Kode/File berhasil diunggah!');
-    res.redirect(`/code/view/${newCode._id}`);
-  } catch (err) {
-    console.error(err);
-    req.flash('error_msg', 'Gagal menyimpan kode/file.');
-    res.render('upload', { title: 'Upload Kode/File - SHARE SOURCE CODE', code: req.body });
-  }
+router.get('/upload', ensureAuthenticated, (req, res) => {
+  res.render('upload', {
+    title: 'Unggah Kode/File Baru',
+    code: null, // Untuk form baru, code adalah null
+    // formData di-pass dari global middleware jika ada flash
+  });
 });
 
-router.get('/view/:id', async (req, res) => {
-  try {
-    const code = await Code.findById(req.params.id).populate('author', 'username');
-    if (!code) {
-      req.flash('error_msg', 'Kode tidak ditemukan.');
-      return res.redirect('/');
-    }
-    const comments = await Comment.find({ codeSnippet: code._id }).populate('author', 'username').sort({ createdAt: -1 });
-    const userHasLiked = req.session.user ? code.likedBy.includes(req.session.user.id) : false;
+router.post('/upload', ensureAuthenticated, upload.single('file'), async (req, res) => {
+  const recaptchaToken = req.body['g-recaptcha-response'];
+  const isRecaptchaValid = await verifyRecaptcha(recaptchaToken);
 
-    res.render('view', {
-      code,
-      comments,
-      userHasLiked,
-      title: `${code.title} - SHARE SOURCE CODE`
-    });
-  } catch (err) {
-    console.error(err);
-    req.flash('error_msg', 'Gagal memuat kode.');
-    res.redirect('/');
-  }
-});
-
-router.get('/edit/:id', isLoggedIn, isAuthor, async (req, res) => {
-  try {
-    const code = await Code.findById(req.params.id);
-    if (!code) {
-      req.flash('error_msg', 'Kode tidak ditemukan.');
-      return res.redirect('/');
-    }
-    res.render('edit', { code, title: `Edit: ${code.title} - SHARE SOURCE CODE` });
-  } catch (err) {
-    console.error(err);
-    req.flash('error_msg', 'Gagal memuat kode untuk diedit.');
-    res.redirect('/');
-  }
-});
-
-router.post('/edit/:id', isLoggedIn, isAuthor, upload.single('file'), async (req, res) => {
-  const { title, description, language, content, tags, remove_file } = req.body;
-  if (!title) {
-    req.flash('error_msg', 'Judul harus diisi.');
-    return res.redirect(`/code/edit/${req.params.id}`);
+  if (!isRecaptchaValid) {
+    req.flash('error_msg', 'Verifikasi reCAPTCHA gagal. Silakan coba lagi.');
+    req.flash('formData', req.body); // Simpan input form
+    return res.redirect('/code/upload');
   }
 
-  try {
-    const code = await Code.findById(req.params.id);
-    if (!code) {
-      req.flash('error_msg', 'Kode tidak ditemukan.');
-      return res.redirect('/');
-    }
+  const { title, description, language, content, tags: tagsString } = req.body;
 
-    code.title = title;
-    code.description = description;
-    code.language = language;
-    code.content = content;
-    code.tags = tags ? tags.split(',').map(tag => tag.trim().toLowerCase()) : [];
+  if (!title || title.trim() === "") {
+    req.flash('error_msg', 'Judul tidak boleh kosong.');
+    req.flash('formData', req.body);
+    return res.redirect('/code/upload');
+  }
+  if (!content && !req.file) {
+    req.flash('error_msg', 'Anda harus mengisi konten kode atau mengunggah file.');
+    req.flash('formData', req.body);
+    return res.redirect('/code/upload');
+  }
+  if (content && req.file) {
+    req.flash('error_msg', 'Harap isi konten kode ATAU unggah file, jangan keduanya.');
+    req.flash('formData', req.body);
+    return res.redirect('/code/upload');
+  }
+
+  const tagsArray = parseTags(tagsString);
+
+  try {
+    const newCodeData = {
+      title,
+      description,
+      language: req.file ? 'file' : (language || 'plaintext'), // Jika file diupload, language jadi 'file'
+      content: req.file ? null : content, // Jika file diupload, content jadi null
+      tags: tagsArray,
+      author: req.user.id, // Asumsi req.user.id tersedia
+    };
 
     if (req.file) {
-        // If there was an old file, attempt to delete it from Cloudinary
-        if (code.fileurl) {
-            try {
-                const publicId = code.fileurl.substring(code.fileurl.lastIndexOf('/') + 1, code.fileurl.lastIndexOf('.'));
-                await cloudinary.uploader.destroy(`code_share_uploads/${publicId}`);
-            } catch (cdnErr) {
-                console.error("Error deleting old file from Cloudinary:", cdnErr);
-            }
-        }
       const result = await new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          { resource_type: "auto", folder: "code_share_uploads" },
-          (error, result) => {
-            if (error) reject(error);
-            else resolve(result);
+        const stream = cloudinary.uploader.upload_stream(
+          { resource_type: "auto", folder: "sharee_files" },
+          (error, uploadResult) => {
+            if (error) return reject(error);
+            resolve(uploadResult);
           }
         );
-        uploadStream.end(req.file.buffer);
+        stream.end(req.file.buffer);
       });
-      code.fileurl = result.secure_url;
-      code.filename = req.file.originalname;
-    } else if (remove_file === 'true' && code.fileurl) {
-        try {
-            const publicId = code.fileurl.substring(code.fileurl.lastIndexOf('/') + 1, code.fileurl.lastIndexOf('.'));
-            await cloudinary.uploader.destroy(`code_share_uploads/${publicId}`);
-            code.fileurl = null;
-            code.filename = null;
-        } catch (cdnErr) {
-            console.error("Error deleting file from Cloudinary:", cdnErr);
-            req.flash('error_msg', 'Gagal menghapus file lama dari Cloudinary.');
-        }
+      newCodeData.fileurl = result.secure_url;
+      newCodeData.filename = req.file.originalname;
+      newCodeData.publicId = result.public_id;
     }
+    
+    const newCode = new Code(newCodeData);
+    await newCode.save();
+    req.flash('success_msg', `Snippet "${newCode.title}" berhasil diunggah!`);
+    res.redirect(`/code/view/${newCode._id}`);
 
-
-    await code.save();
-    req.flash('success_msg', 'Kode berhasil diperbarui!');
-    res.redirect(`/code/view/${code._id}`);
   } catch (err) {
-    console.error(err);
-    req.flash('error_msg', 'Gagal memperbarui kode.');
-    res.redirect(`/code/edit/${req.params.id}`);
+    console.error("Error saat upload:", err);
+    req.flash('error_msg', 'Terjadi kesalahan saat menyimpan data.');
+    req.flash('formData', req.body);
+    res.redirect('/code/upload');
   }
 });
 
-router.post('/delete/:id', isLoggedIn, isAuthor, async (req, res) => {
+router.get('/edit/:id', ensureAuthenticated, async (req, res) => {
   try {
-    const code = await Code.findById(req.params.id);
-    if (!code) {
-      req.flash('error_msg', 'Kode tidak ditemukan.');
+    const codeToEdit = await Code.findById(req.params.id).lean(); // .lean() untuk plain JS object
+    if (!codeToEdit) {
+      req.flash('error_msg', 'Snippet tidak ditemukan.');
+      return res.redirect('/404'); // Atau halaman daftar snippet pengguna
+    }
+    // Pastikan req.user.id adalah string jika codeToEdit.author juga string (hasil dari .lean())
+    if (codeToEdit.author.toString() !== req.user.id.toString()) {
+      req.flash('error_msg', 'Anda tidak berhak mengedit snippet ini.');
+      return res.redirect('/');
+    }
+    
+    // `codeToEdit.tags` sudah pasti array dari model atau pre-save hook.
+    // `upload.ejs` akan menggunakan `code.tags.join(', ')`
+    res.render('upload', {
+      title: 'Edit Kode/File',
+      code: codeToEdit, // Kirim data yang sudah pasti plain object dan tags-nya array
+    });
+  } catch (err) {
+    console.error("Error saat mengambil data untuk edit (ID: " + req.params.id + "):", err);
+    req.flash('error_msg', 'Gagal memuat data untuk diedit.');
+    res.redirect('/');
+  }
+});
+
+router.post('/edit/:id', ensureAuthenticated, upload.single('file'), async (req, res) => {
+  const { title, description, language, content, tags: tagsString, remove_file } = req.body;
+  const codeId = req.params.id;
+
+  if (!title || title.trim() === "") {
+    req.flash('error_msg', 'Judul tidak boleh kosong.');
+    req.flash('formData', { ...req.body, _id: codeId }); // Kirim ID untuk re-render form edit
+    return res.redirect(`/code/edit/${codeId}`);
+  }
+  
+  const isNewFileUploaded = !!req.file;
+  const isContentProvided = content && content.trim() !== '';
+
+  if (isContentProvided && isNewFileUploaded) {
+    req.flash('error_msg', 'Harap isi konten kode ATAU unggah file baru, jangan keduanya saat mengedit.');
+    req.flash('formData', { ...req.body, _id: codeId });
+    return res.redirect(`/code/edit/${codeId}`);
+  }
+
+  const tagsArray = parseTags(tagsString);
+
+  try {
+    const codeToUpdate = await Code.findById(codeId);
+    if (!codeToUpdate) {
+      req.flash('error_msg', 'Snippet tidak ditemukan.');
+      return res.redirect('/404');
+    }
+    if (codeToUpdate.author.toString() !== req.user.id.toString()) {
+      req.flash('error_msg', 'Anda tidak berhak mengedit snippet ini.');
       return res.redirect('/');
     }
 
-    if (code.fileurl) {
-      try {
-        const publicId = code.fileurl.substring(code.fileurl.lastIndexOf('/') + 1, code.fileurl.lastIndexOf('.'));
-        await cloudinary.uploader.destroy(`code_share_uploads/${publicId}`, { resource_type: code.fileurl.includes('/image/') ? 'image' : 'raw' });
-      } catch (cdnErr) {
-        console.error("Error deleting file from Cloudinary:", cdnErr);
+    codeToUpdate.title = title;
+    codeToUpdate.description = description;
+    codeToUpdate.tags = tagsArray;
+
+    if (remove_file === 'true' && codeToUpdate.publicId) {
+      await cloudinary.uploader.destroy(codeToUpdate.publicId);
+      codeToUpdate.fileurl = null;
+      codeToUpdate.filename = null;
+      codeToUpdate.publicId = null;
+      // Jika file dihapus, dan tidak ada konten baru, maka jadi 'file' tanpa file
+      // atau update language berdasarkan content
+      if (!isContentProvided) {
+        codeToUpdate.language = 'file'; // Menandakan ini adalah entri file, tapi filenya kosong
+        codeToUpdate.content = null;
+      } else {
+        codeToUpdate.language = language || 'plaintext';
+        codeToUpdate.content = content;
       }
     }
-    await Comment.deleteMany({ codeSnippet: code._id });
-    await Code.findByIdAndDelete(req.params.id);
 
-    req.flash('success_msg', 'Kode berhasil dihapus.');
-    res.redirect('/code/my-snippets');
-  } catch (err) {
-    console.error(err);
-    req.flash('error_msg', 'Gagal menghapus kode.');
-    res.redirect('/');
-  }
-});
-
-router.get('/my-snippets', isLoggedIn, async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const query = { author: req.session.user.id };
-
-    const totalCodes = await Code.countDocuments(query);
-    const codes = await Code.find(query)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * ITEMS_PER_PAGE_MY_SNIPPETS)
-      .limit(ITEMS_PER_PAGE_MY_SNIPPETS);
-
-    res.render('my_snippets', {
-      codes,
-      currentPage: page,
-      hasNextPage: ITEMS_PER_PAGE_MY_SNIPPETS * page < totalCodes,
-      hasPreviousPage: page > 1,
-      nextPage: page + 1,
-      previousPage: page - 1,
-      lastPage: Math.ceil(totalCodes / ITEMS_PER_PAGE_MY_SNIPPETS),
-      title: 'Snippet Saya - SHARE SOURCE CODE'
-    });
-  } catch (err) {
-    console.error(err);
-    req.flash('error_msg', 'Gagal memuat snippet Anda.');
-    res.redirect('/');
-  }
-});
-
-router.post('/:id/like', isLoggedIn, async (req, res) => {
-  try {
-    const code = await Code.findById(req.params.id);
-    if (!code) {
-      return res.status(404).json({ message: 'Kode tidak ditemukan' });
+    if (isNewFileUploaded) {
+      if (codeToUpdate.publicId) { 
+        await cloudinary.uploader.destroy(codeToUpdate.publicId);
+      }
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { resource_type: "auto", folder: "sharee_files" },
+          (error, uploadResult) => {
+            if (error) return reject(error);
+            resolve(uploadResult);
+          }
+        );
+        stream.end(req.file.buffer);
+      });
+      
+      codeToUpdate.fileurl = result.secure_url;
+      codeToUpdate.filename = req.file.originalname;
+      codeToUpdate.publicId = result.public_id;
+      codeToUpdate.language = 'file'; // Update language menjadi 'file'
+      codeToUpdate.content = null;   // Konten teks di-null-kan
+    } else if (remove_file !== 'true' && isContentProvided) {
+      // Jika file lama tidak dihapus, tidak ada file baru, TAPI ada konten teks
+      // Ini berarti pengguna ingin mengganti file lama (jika ada) dengan konten teks.
+      if (codeToUpdate.language === 'file' && codeToUpdate.publicId) {
+          await cloudinary.uploader.destroy(codeToUpdate.publicId);
+          codeToUpdate.fileurl = null;
+          codeToUpdate.filename = null;
+          codeToUpdate.publicId = null;
+      }
+      codeToUpdate.content = content;
+      codeToUpdate.language = language || 'plaintext';
+    } else if (remove_file !== 'true' && !isNewFileUploaded && !isContentProvided && codeToUpdate.language !== 'file') {
+        // Tidak ada file baru, file lama tidak dihapus, tidak ada konten teks BARU, dan BUKAN tipe 'file' sebelumnya
+        // Artinya konten teks yang ada sebelumnya dikosongkan.
+        codeToUpdate.content = null; 
+        // Biarkan language seperti sebelumnya, atau reset jika diperlukan
+        // codeToUpdate.language = language || 'plaintext'; // Tergantung logika bisnis
     }
+    // Kasus: tidak ada file baru, file lama (jika ada) tidak dihapus, tidak ada konten teks, dan tipe 'file' -> tidak ada perubahan pada file/content.
 
-    const userId = req.session.user.id;
-    const index = code.likedBy.indexOf(userId);
+    await codeToUpdate.save();
+    req.flash('success_msg', 'Snippet berhasil diperbarui!');
+    res.redirect(`/code/view/${codeToUpdate._id}`);
 
-    if (index === -1) {
-      code.likedBy.push(userId);
-      code.likes = code.likedBy.length;
-    } else {
-      code.likedBy.splice(index, 1);
-      code.likes = code.likedBy.length;
-    }
-    await code.save();
-    res.json({ likes: code.likes, liked: index === -1 });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Gagal memproses like' });
+    console.error(`Error saat edit snippet ID ${codeId}:`, err);
+    req.flash('error_msg', 'Gagal memperbarui snippet.');
+    req.flash('formData', { ...req.body, _id: codeId });
+    res.redirect(`/code/edit/${codeId}`);
   }
 });
 
-router.post('/:id/comment', isLoggedIn, async (req, res) => {
-  const { text } = req.body;
-  if (!text || text.trim() === '') {
-    req.flash('error_msg', 'Komentar tidak boleh kosong.');
-    return res.redirect(`/code/view/${req.params.id}`);
-  }
-  try {
-    const code = await Code.findById(req.params.id);
-    if (!code) {
-      req.flash('error_msg', 'Kode tidak ditemukan.');
-      return res.redirect('/');
-    }
-    const newComment = new Comment({
-      text,
-      codeSnippet: req.params.id,
-      author: req.session.user.id
-    });
-    await newComment.save();
-    req.flash('success_msg', 'Komentar berhasil ditambahkan.');
-    res.redirect(`/code/view/${req.params.id}#comments-section`);
-  } catch (err) {
-    console.error(err);
-    req.flash('error_msg', 'Gagal menambahkan komentar.');
-    res.redirect(`/code/view/${req.params.id}`);
-  }
-});
-
-router.get('/:id/download', async (req, res) => {
+// Rute untuk melihat detail snippet
+router.get('/view/:id', async (req, res) => {
     try {
-        const code = await Code.findById(req.params.id);
-        if (!code || !code.content) {
-            req.flash('error_msg', 'Konten kode tidak ditemukan untuk diunduh.');
-            return res.redirect('back');
+        const code = await Code.findById(req.params.id).populate('author', 'username').populate('comments.author', 'username').lean();
+        if (!code) {
+            req.flash('error_msg', 'Snippet tidak ditemukan.');
+            return res.status(404).render('404', { title: '404 - Snippet Tidak Ditemukan' });
+        }
+        // Pastikan `code.tags` adalah array untuk EJS
+        if (code.tags && !Array.isArray(code.tags)) {
+            code.tags = typeof code.tags === 'string' ? code.tags.split(',').map(t=>t.trim()) : [];
+        } else if (!code.tags) {
+            code.tags = [];
+        }
+        
+        let userHasLiked = false;
+        if (req.user && code.likedBy) {
+            userHasLiked = code.likedBy.some(userId => userId.equals(req.user._id));
         }
 
-        let filename = `${code.title.replace(/\s+/g, '_') || 'code'}`;
-        let contentType = 'text/plain';
-
-        if (code.language === 'htmlmixed' || code.language === 'html') filename += '.html';
-        else if (code.language === 'css') filename += '.css';
-        else if (code.language === 'javascript') filename += '.js';
-        else if (code.language === 'python') filename += '.py';
-        else if (code.language === 'text/x-java') filename += '.java';
-        else if (code.language === 'text/x-csrc') filename += '.c';
-        else if (code.language === 'text/x-c++src') filename += '.cpp';
-        else filename += '.txt';
-
-        if (code.language.includes('html')) contentType = 'text/html';
-        else if (code.language === 'css') contentType = 'text/css';
-        else if (code.language === 'javascript') contentType = 'application/javascript';
+        res.render('view', {
+            title: code.title,
+            code,
+            comments: code.comments || [],
+            currentUser: req.user,
+            userHasLiked
+        });
+    } catch (error) {
+        console.error('Error fetching code for view:', error);
+        req.flash('error_msg', 'Gagal memuat snippet.');
+        res.redirect('/');
+    }
+});
 
 
-        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
-        res.setHeader('Content-Type', contentType);
-        res.send(code.content);
-
-    } catch (err) {
-        console.error(err);
-        req.flash('error_msg', 'Gagal mengunduh kode.');
-        res.redirect('back');
+// Rute lainnya (delete, my-snippets, like, comment, dll.) perlu Anda implementasikan atau periksa.
+// Contoh dasar untuk rute GET utama (indeks) jika Anda belum punya:
+router.get('/', async (req, res) => {
+    // Logika untuk mengambil dan menampilkan semua snippet (dengan paginasi, filter, dll.)
+    // Ini hanyalah placeholder
+    try {
+        const codes = await Code.find().populate('author', 'username').sort({ createdAt: -1 }).limit(10).lean();
+        const languages = await Code.distinct('language'); // Ambil daftar bahasa unik
+        res.render('index', {
+            title: 'Beranda - SHARECODE',
+            codes,
+            languages: languages.filter(lang => lang !== 'file'), // Jangan tampilkan 'file' di filter bahasa
+            query: req.query, // Untuk mempertahankan filter
+            currentPage: 1, // Implementasi paginasi diperlukan
+            lastPage: 1,
+            hasPreviousPage: false,
+            hasNextPage: false,
+            previousPage: null,
+            nextPage: null,
+            currentUser: req.user
+        });
+    } catch (error) {
+        console.error('Error fetching codes for index:', error);
+        req.flash('error_msg', 'Gagal memuat daftar kode.');
+        res.render('index', {
+            title: 'Beranda - SHARECODE',
+            codes: [],
+            languages: [],
+            query: {},
+            currentPage: 1,
+            lastPage: 1,
+            hasPreviousPage: false,
+            hasNextPage: false,
+            previousPage: null,
+            nextPage: null,
+            currentUser: req.user
+        });
     }
 });
 
