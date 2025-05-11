@@ -6,7 +6,7 @@ const flash = require('connect-flash');
 const path = require('path');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
-
+const MongoStore = require('connect-mongo');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
