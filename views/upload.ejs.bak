@@ -148,7 +148,7 @@
          } else {
             // Fallback for simple names like 'html', 'css' if not directly MIME types
             const modeMap = {
-                'html': 'htmlmixed', 'js': 'javascript', 'css': 'css', 'python': 'python',
+                'html': 'htmlmixed', 'javascript': 'javascript', 'css': 'css', 'python': 'python',
                 'java': 'text/x-java', 'c': 'text/x-csrc', 'cpp': 'text/x-c++src',
                 'php': 'php', 'ruby': 'ruby', 'go': 'go', 'rust': 'rust', 'sql':'sql', 'markdown':'markdown'
             };
