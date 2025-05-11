@@ -15,9 +15,9 @@ const CodeSchema = new mongoose.Schema({
     required: function() { return !this.fileurl; }
   },
   language: {
-  type: String,
-  default: 'plain'
-},
+    type: String,
+    default: 'plaintext'
+  },
   tags: [{
     type: String,
     trim: true,
