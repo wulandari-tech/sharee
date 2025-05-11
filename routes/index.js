@@ -1,110 +1,58 @@
-// routes/index.js
 const express = require('express');
 const router = express.Router();
-const Code = require('../models/code'); // Sesuaikan path ke model Anda
+const Code = require('../models/code');
+
+const ITEMS_PER_PAGE = 10;
 
 router.get('/', async (req, res) => {
+  try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 9; // Default 9 item per halaman
-    const skip = (page - 1) * limit;
-
     const searchQuery = req.query.search || '';
-    const languageQuery = req.query.language || '';
+    const langQuery = req.query.language || '';
     const tagQuery = req.query.tag || '';
 
-    let findConditions = {};
-    let sortOptions = { createdAt: -1 }; // Default sorting
-
+    let query = {};
     if (searchQuery) {
-        findConditions.$text = { $search: searchQuery };
-        // Jika menggunakan text search, MongoDB biasanya menangani relevansi
-        // Jika ingin tetap sortir by date setelah relevansi, perlu lebih kompleks
-        // sortOptions = { score: { $meta: "textScore" }, createdAt: -1 };
+      query.$or = [
+        { title: { $regex: searchQuery, $options: 'i' } },
+        { description: { $regex: searchQuery, $options: 'i' } }
+      ];
     }
-
-    if (languageQuery) {
-        findConditions.language = languageQuery;
+    if (langQuery) {
+      query.language = langQuery;
     }
-
     if (tagQuery) {
-        findConditions.tags = tagQuery; // Pencarian tag yang persis case-insensitive
+      query.tags = tagQuery.toLowerCase();
     }
 
-    // Tambahkan filter untuk tidak menampilkan 'file' kecuali secara eksplisit diminta (misalnya, jika ada filter bahasa 'file')
-    if (!languageQuery || (languageQuery && languageQuery.toLowerCase() !== 'file')) {
-        if (findConditions.language) {
-            // Jika ada filter bahasa, dan itu bukan 'file', maka itu sudah cukup
-            // Jika filter bahasa adalah 'all' atau kosong, dan kita tidak ingin 'file'
-        } else {
-            // findConditions.language = { $ne: 'file' }; // Sembunyikan 'file' secara default
-        }
-    }
+    const totalCodes = await Code.countDocuments(query);
+    const codes = await Code.find(query)
+      .populate('author', 'username')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * ITEMS_PER_PAGE)
+      .limit(ITEMS_PER_PAGE);
 
+    const languages = await Code.distinct('language');
 
-    try {
-        const codesPromise = Code.find(findConditions)
-            .populate('author', 'username')
-            .sort(sortOptions)
-            .skip(skip)
-            .limit(limit)
-            .lean();
-
-        const totalCodesPromise = Code.countDocuments(findConditions);
-        const languagesPromise = Code.distinct('language');
-
-        const [codes, totalCodes, allLanguages] = await Promise.all([
-            codesPromise,
-            totalCodesPromise,
-            languagesPromise
-        ]);
-
-        const lastPage = Math.ceil(totalCodes / limit) || 1;
-        
-        const uniqueLanguages = [...new Set(allLanguages)]
-                                .filter(lang => lang && lang.toLowerCase() !== 'file') // Hapus 'file' dari opsi filter
-                                .sort();
-
-        res.render('index', {
-            title: 'Beranda - SHARECODE',
-            codes,
-            languages: uniqueLanguages,
-            currentUser: req.user || null,
-            query: req.query,
-            currentPage: page,
-            lastPage,
-            hasPreviousPage: page > 1,
-            hasNextPage: page < lastPage,
-            previousPage: page - 1,
-            nextPage: page + 1,
-            totalCodes: totalCodes,
-            limit: limit,
-            searchQuery,
-            languageQuery,
-            tagQuery
-        });
-
-    } catch (err) {
-        console.error("Error fetching data for homepage:", err);
-        req.flash('error_msg', 'Tidak dapat memuat data. Silakan coba lagi nanti.');
-        res.render('index', {
-            title: 'Beranda - SHARECODE',
-            codes: [],
-            languages: [],
-            currentUser: req.user || null,
-            query: req.query || {},
-            currentPage: 1,
-            lastPage: 1,
-            hasPreviousPage: false,
-            hasNextPage: false,
-            previousPage: 1,
-            nextPage: 1,
-            totalCodes: 0,
-            limit: limit,
-            searchQuery,
-            languageQuery,
-            tagQuery
-        });
-    }
+    res.render('index', {
+      codes,
+      languages,
+      currentPage: page,
+      hasNextPage: ITEMS_PER_PAGE * page < totalCodes,
+      hasPreviousPage: page > 1,
+      nextPage: page + 1,
+      previousPage: page - 1,
+      lastPage: Math.ceil(totalCodes / ITEMS_PER_PAGE),
+      searchQuery,
+      langQuery,
+      tagQuery,
+      title: 'Beranda - SHARE SOURCE CODE'
+    });
+  } catch (err) {
+    console.error(err);
+    req.flash('error_msg', 'Gagal memuat kode.');
+    res.redirect('/');
+  }
 });
 
 module.exports = router;
