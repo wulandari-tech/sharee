@@ -1,0 +1,24 @@
+{
+  "name": "code-share-platform",
+  "version": "1.0.0",
+  "description": "Website untuk berbagi kode dan file",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "Awanberlian",
+  "license": "MIT",
+  "dependencies": {
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "axios": "^1.6.8",
+    "mongoose": "^7.6.1",
+    "dotenv": "^16.3.1",
+    "cloudinary":  "^2.6.1",
+    "multer": "^1.4.5-lts.1",
+    "express-session": "^1.17.3",
+    "bcryptjs": "^2.4.3",
+    "connect-flash": "^0.1.1",
+    "connect-mongo": "^5.1.0"
+  }
+}

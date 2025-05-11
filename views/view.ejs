@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #111827; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    pre code.hljs { border-radius: 0.5rem; padding: 1.5rem; font-size: 0.9rem; line-height: 1.6; }
+    .action-button {
+      @apply px-5 py-2.5 rounded-lg font-semibold transition-all duration-300 ease-in-out transform hover:scale-105 shadow-md flex items-center;
+    }
+    .tag-link-view {
+        @apply bg-gray-700 text-indigo-300 text-xs px-3 py-1.5 rounded-full mr-2 mb-2 inline-block hover:bg-indigo-600 hover:text-white transition-colors;
+    }
+    .comment-card {
+        @apply bg-gray-800 p-4 rounded-lg border border-gray-700;
+    }
+    .like-button.liked {
+        background-color: #ef4444; /* Red-500 */
+        color: white;
+    }
+    .like-button.liked:hover {
+        background-color: #dc2626; /* Red-600 */
+    }
+    #previewFrame {
+        background-color: white; /* Ensure iframe background is white for HTML content */
+    }
+  </style>
+</head>
+<body class="text-gray-200 min-h-screen">
+  <%- include('partials/_navbar') %>
+  <%- include('partials/_messages') %>
+
+  <div class="max-w-5xl mx-auto p-6 md:p-10 space-y-8 mt-8">
+    <article class="bg-gray-800 shadow-2xl rounded-xl p-6 md:p-8 border border-gray-700">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+        <h1 class="text-3xl md:text-4xl font-bold text-indigo-400 break-words"><%= code.title %></h1>
+        <% if (currentUser && code.author && currentUser.id === code.author._id.toString()) { %>
+          <div class="mt-3 md:mt-0 flex space-x-2">
+            <a href="/code/edit/<%= code._id %>" class="text-sm bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-md flex items-center"><i class="fas fa-edit mr-1"></i> Edit</a>
+            <form action="/code/delete/<%= code._id %>" method="POST" onsubmit="return confirm('Yakin ingin menghapus postingan ini? Seluruh data terkait (komentar, file) juga akan dihapus permanen.');" class="inline">
+              <button type="submit" class="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md flex items-center"><i class="fas fa-trash-alt mr-1"></i> Hapus</button>
+            </form>
+          </div>
+        <% } %>
+      </div>
+
+      <div class="text-sm text-gray-400 mb-6 space-y-1 md:space-y-0 md:flex md:space-x-4">
+        <span><i class="fas fa-user mr-1 text-indigo-400"></i> Oleh: <strong class="text-gray-200"><%= code.author ? code.author.username : 'Anonim' %></strong></span>
+        <span><i class="fas fa-calendar-alt mr-1 text-indigo-400"></i> Diunggah: <strong class="text-gray-200"><%= new Date(code.createdAt).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) %></strong></span>
+        <span><i class="fas fa-sync-alt mr-1 text-indigo-400"></i> Diperbarui: <strong class="text-gray-200"><%= new Date(code.updatedAt).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) %></strong></span>
+         <span class="flex items-center">
+            <i class="fas fa-heart mr-1 <%= userHasLiked ? 'text-red-500' : 'text-gray-500' %>"></i>
+            <span id="like-count"><%= code.likes %></span> Suka
+        </span>
+      </div>
+
+      <% if (code.description) { %>
+        <div class="prose prose-invert max-w-none mb-6 text-gray-300">
+          <h2 class="text-xl font-semibold text-indigo-300 mb-2 border-b border-gray-700 pb-1">Deskripsi</h2>
+          <p><%= code.description %></p>
+        </div>
+      <% } %>
+
+      <% if (code.tags && code.tags.length > 0) { %>
+        <div class="mb-6">
+          <h3 class="text-lg font-semibold text-indigo-300 mb-2">Tags:</h3>
+          <% code.tags.forEach(tag => { %>
+            <a href="/?tag=<%=tag%>" class="tag-link-view"><i class="fas fa-tag mr-1"></i><%= tag %></a>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <div class="flex flex-wrap gap-3 my-6">
+        <button onclick="copyCode()" class="action-button bg-blue-600 hover:bg-blue-700 text-white">
+          <i class="fas fa-copy mr-2"></i>Copy Kode
+        </button>
+        <% if (code.content && (code.language === 'htmlmixed' || code.language === 'html')) { %>
+          <button onclick="showPreview()" class="action-button bg-green-600 hover:bg-green-700 text-white">
+            <i class="fas fa-eye mr-2"></i>Preview HTML
+          </button>
+        <% } %>
+        <% if (code.fileurl) { %>
+          <a href="<%= code.fileurl %>" target="_blank" rel="noopener noreferrer" class="action-button bg-purple-600 hover:bg-purple-700 text-white">
+            <i class="fas fa-download mr-2"></i>Download File (<%= code.filename ? code.filename.split('.').pop().toUpperCase() : 'FILE' %>)
+          </a>
+        <% } %>
+         <% if (code.content && code.language !== 'file') { %>
+            <a href="/code/<%= code._id %>/download" class="action-button bg-teal-600 hover:bg-teal-700 text-white">
+                <i class="fas fa-file-code mr-2"></i>Download Kode Mentah
+            </a>
+        <% } %>
+        <% if (currentUser) { %>
+            <button id="likeButton" data-code-id="<%= code._id %>" class="action-button <%= userHasLiked ? 'liked bg-red-500 hover:bg-red-600' : 'bg-gray-600 hover:bg-gray-500' %> text-white">
+                <i class="fas fa-heart mr-2"></i> <span id="likeButtonText"><%= userHasLiked ? 'Batal Suka' : 'Sukai' %></span>
+            </button>
+        <% } %>
+      </div>
+
+      <div id="previewBox" class="mt-6 hidden">
+        <h2 class="text-xl font-bold mb-2 text-indigo-300">Preview HTML</h2>
+        <iframe id="previewFrame" class="w-full h-96 rounded-lg border-2 border-gray-700 bg-white shadow-lg"></iframe>
+      </div>
+      
+      <% if (code.content && code.language !== 'file') { %>
+        <pre class="shadow-inner"><code id="codeblock" class="language-<%= code.language %>"><%- code.content %></code></pre>
+      <% } else if (code.filename) { %>
+        <div class="bg-gray-700 p-6 rounded-lg text-center">
+            <i class="fas fa-file-archive fa-3x text-indigo-400 mb-3"></i>
+            <p class="text-xl text-gray-200">Ini adalah postingan file: <strong><%= code.filename %></strong></p>
+            <p class="text-gray-400">Gunakan tombol "Download File" di atas untuk mengunduh.</p>
+        </div>
+      <% } %>
+    </article>
+
+    <section id="comments-section" class="bg-gray-800 shadow-2xl rounded-xl p-6 md:p-8 border border-gray-700">
+      <h2 class="text-2xl font-semibold text-indigo-300 mb-6 border-b border-gray-700 pb-3">
+        <i class="fas fa-comments mr-2"></i> Komentar (<%= comments.length %>)
+      </h2>
+      <% if (currentUser) { %>
+        <form action="/code/<%= code._id %>/comment" method="POST" class="mb-8">
+          <textarea name="text" rows="4" placeholder="Tulis komentarmu di sini..." required class="w-full p-3 rounded-md bg-gray-700 border border-gray-600 text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow"></textarea>
+          <button type="submit" class="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2.5 rounded-md transition-colors shadow-md hover:shadow-lg">
+            <i class="fas fa-paper-plane mr-2"></i>Kirim Komentar
+          </button>
+        </form>
+      <% } else { %>
+        <p class="mb-8 text-gray-400">
+          <a href="/auth/login?redirect=/code/view/<%= code._id %>" class="text-indigo-400 hover:underline font-semibold">Login</a> atau 
+          <a href="/auth/register?redirect=/code/view/<%= code._id %>" class="text-indigo-400 hover:underline font-semibold">Register</a> untuk berkomentar.
+        </p>
+      <% } %>
+
+      <div class="space-y-6">
+        <% if (comments.length > 0) { %>
+          <% comments.forEach(comment => { %>
+            <div class="comment-card">
+              <div class="flex items-center mb-2">
+                <i class="fas fa-user-circle fa-lg text-indigo-400 mr-3"></i>
+                <div>
+                  <p class="font-semibold text-gray-100"><%= comment.author ? comment.author.username : 'Anonim' %></p>
+                  <p class="text-xs text-gray-500"><%= new Date(comment.createdAt).toLocaleString('id-ID') %></p>
+                </div>
+              </div>
+              <p class="text-gray-300 whitespace-pre-wrap"><%= comment.text %></p>
+            </div>
+          <% }) %>
+        <% } else { %>
+          <p class="text-gray-500 italic text-center py-4">Belum ada komentar.</p>
+        <% } %>
+      </div>
+    </section>
+
+  </div>
+
+  <%- include('partials/_footer') %>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', (event) => {
+      hljs.highlightAll();
+    });
+
+    function copyCode() {
+      const codeElement = document.getElementById("codeblock");
+      if (!codeElement) {
+          alert("Tidak ada blok kode untuk disalin.");
+          return;
+      }
+      const code = codeElement.innerText;
+      navigator.clipboard.writeText(code).then(() => {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'fixed top-20 right-5 bg-green-500 text-white p-4 rounded-lg shadow-lg z-50 animate-fadeInOut';
+        alertDiv.textContent = 'Kode berhasil disalin!';
+        document.body.appendChild(alertDiv);
+        setTimeout(() => { alertDiv.remove(); }, 3000);
+      }).catch(err => {
+        console.error('Gagal menyalin kode: ', err);
+        alert("Gagal menyalin kode. Coba lagi.");
+      });
+    }
+
+    function showPreview() {
+      const iframe = document.getElementById("previewFrame");
+      const codeElement = document.getElementById("codeblock");
+       if (!codeElement) {
+          alert("Tidak ada blok kode untuk ditampilkan previewnya.");
+          return;
+      }
+      const content = codeElement.innerText;
+      iframe.srcdoc = content;
+      document.getElementById("previewBox").classList.remove("hidden");
+      window.scrollTo({ top: document.getElementById("previewBox").offsetTop - 80, behavior: "smooth" });
+    }
+
+    const likeButton = document.getElementById('likeButton');
+    if (likeButton) {
+      likeButton.addEventListener('click', async function() {
+        const codeId = this.dataset.codeId;
+        try {
+          const response = await fetch(`/code/${codeId}/like`, { method: 'POST' });
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          const data = await response.json();
+          document.getElementById('like-count').textContent = data.likes;
+          const likeButtonText = document.getElementById('likeButtonText');
+          if (data.liked) {
+            this.classList.add('liked', 'bg-red-500', 'hover:bg-red-600');
+            this.classList.remove('bg-gray-600', 'hover:bg-gray-500');
+            likeButtonText.textContent = 'Batal Suka';
+            this.querySelector('i').classList.remove('text-gray-500');
+            this.querySelector('i').classList.add('text-red-500');
+
+          } else {
+            this.classList.remove('liked', 'bg-red-500', 'hover:bg-red-600');
+            this.classList.add('bg-gray-600', 'hover:bg-gray-500');
+            likeButtonText.textContent = 'Sukai';
+            this.querySelector('i').classList.add('text-gray-500');
+            this.querySelector('i').classList.remove('text-red-500');
+          }
+        } catch (error) {
+          console.error('Error liking code:', error);
+          alert('Gagal memproses suka. Coba lagi nanti.');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>404 - Halaman Tidak Ditemukan</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #111827; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    .gradient-text-404 {
+      background: linear-gradient(90deg, #f87171, #fb923c); /* red-400 to orange-400 */
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+  </style>
+</head>
+<body class="text-gray-200 min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-gray-900 via-red-900 to-orange-900">
+  <div class="text-center">
+    <div class="relative inline-block">
+        <i class="fas fa-ghost fa-10x text-gray-700 transform -rotate-12 opacity-50"></i>
+        <h1 class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-9xl font-bold gradient-text-404" style="font-family: 'Orbitron', sans-serif;">404</h1>
+    </div>
+    <h2 class="mt-10 text-4xl font-semibold text-white">Oops! Halaman Hilang.</h2>
+    <p class="mt-4 text-lg text-orange-300">
+      Sepertinya halaman yang Anda cari telah diculik oleh alien atau mungkin tidak pernah ada.
+    </p>
+    <div class="mt-10">
+      <a href="/" class="bg-orange-500 hover:bg-orange-600 text-white font-bold px-8 py-4 rounded-lg text-lg transition-colors shadow-xl hover:shadow-2xl">
+        <i class="fas fa-home mr-2"></i> Kembali ke Beranda
+      </a>
+    </div>
+  </div>
+  <footer class="absolute bottom-6 text-center text-sm text-orange-400 opacity-75">
+    © <%= new Date().getFullYear() %> SHARECODE - Kami juga bingung ini ada di mana.
+  </footer>
+</body>
+</html>

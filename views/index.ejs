@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #111827; /* dark gray */ }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@700&display=swap');
+    .card-hover-effect {
+      transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+    }
+    .card-hover-effect:hover {
+      transform: translateY(-5px) scale(1.02);
+      box-shadow: 0 10px 20px rgba(79, 70, 229, 0.5), 0 6px 6px rgba(79, 70, 229, 0.23);
+    }
+    .gradient-text {
+      background: linear-gradient(90deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tag-link {
+        @apply bg-gray-700 text-indigo-300 text-xs px-2 py-1 rounded-full mr-2 mb-2 inline-block hover:bg-indigo-600 hover:text-white transition-colors;
+    }
+    .pagination-link {
+        @apply px-4 py-2 border border-gray-700 text-gray-300 hover:bg-indigo-600 hover:text-white rounded-md transition-colors;
+    }
+    .pagination-link-active {
+        @apply bg-indigo-600 text-white;
+    }
+    .filter-container {
+        background: rgba(31, 41, 55, 0.8); /* bg-gray-800 with opacity */
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+  </style>
+</head>
+<body class="text-gray-200 min-h-screen">
+  <%- include('partials/_navbar') %>
+  <%- include('partials/_messages') %>
+
+  <header class="py-10 md:py-16 bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-center">
+    <div class="max-w-4xl mx-auto px-4">
+      <h1 class="text-4xl md:text-6xl font-bold tracking-tight text-white" style="font-family: 'Orbitron', sans-serif;">
+        <span class="gradient-text">SHARE</span> SOURCE CODE
+      </h1>
+      <p class="mt-4 text-lg md:text-xl text-indigo-300">
+        Temukan, bagikan, dan pelajari kode bersama komunitas.
+      </p>
+       <p class="mt-2 text-sm text-gray-400">SALING DUKUNG SUPAYA KAMI SEMANGAT SHARE TEMPLATE!</p>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="filter-container p-6 rounded-lg shadow-xl mb-8 sticky top-20 z-40">
+      <form method="GET" action="/" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div>
+          <label for="search" class="block text-sm font-medium text-indigo-300 mb-1">Cari Kode</label>
+          <input type="text" name="search" id="search" value="<%= query.search || '' %>" placeholder="Judul, deskripsi..." class="w-full p-3 rounded-md bg-gray-700 border border-gray-600 text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow">
+        </div>
+        <div>
+          <label for="language" class="block text-sm font-medium text-indigo-300 mb-1">Bahasa</label>
+          <select name="language" id="language" class="w-full p-3 rounded-md bg-gray-700 border border-gray-600 text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow">
+            <option value="">Semua Bahasa</option>
+            <% languages.forEach(lang => { %>
+              <option value="<%= lang %>" <%= query.language === lang ? 'selected' : '' %>><%= lang %></option>
+            <% }) %>
+          </select>
+        </div>
+        <button type="submit" class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-3 rounded-md transition-colors shadow-md hover:shadow-lg">
+          <i class="fas fa-search mr-2"></i>Filter
+        </button>
+      </form>
+        <% if (query.tag) { %>
+            <div class="mt-4 text-center">
+                <span class="text-indigo-300">Menampilkan hasil untuk tag: <strong class="text-white"><%= query.tag %></strong></span>
+                <a href="/?search=<%= query.search || '' %>&language=<%= query.language || '' %>" class="ml-2 text-sm text-red-400 hover:text-red-300">(Hapus filter tag)</a>
+            </div>
+        <% } %>
+    </div>
+
+    <h2 class="text-3xl font-semibold mb-8 text-center text-white">
+      <i class="fas fa-fire mr-2 text-orange-400"></i>Kode Terbaru
+    </h2>
+
+    <% if (codes.length === 0) { %>
+      <div class="text-center py-12">
+        <i class="fas fa-ghost fa-3x text-gray-600 mb-4"></i>
+        <p class="text-gray-500 italic text-xl">Belum ada kode yang diunggah atau cocok dengan filter Anda.</p>
+        <% if (currentUser) { %>
+          <a href="/code/upload" class="mt-6 inline-block bg-green-500 hover:bg-green-600 text-white font-semibold px-6 py-3 rounded-md transition-colors shadow-lg">
+            <i class="fas fa-plus-circle mr-2"></i>Unggah Kode Pertamamu!
+          </a>
+        <% } else { %>
+           <a href="/auth/register" class="mt-6 inline-block bg-green-500 hover:bg-green-600 text-white font-semibold px-6 py-3 rounded-md transition-colors shadow-lg">
+            <i class="fas fa-user-plus mr-2"></i>Daftar & Mulai Berbagi!
+          </a>
+        <% } %>
+      </div>
+    <% } else { %>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <% codes.forEach(code => { %>
+          <div class="bg-gray-800 p-6 rounded-xl shadow-2xl card-hover-effect flex flex-col justify-between border border-gray-700">
+            <div>
+              <div class="flex justify-between items-start mb-2">
+                <span class="bg-indigo-600 text-indigo-100 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">
+                  <%= code.language === 'file' ? 'FILE' : code.language %>
+                </span>
+                <div class="text-gray-400 text-sm flex items-center">
+                  <i class="fas fa-heart mr-1 <%= code.likedBy && code.likedBy.includes(currentUser && currentUser.id) ? 'text-red-500' : 'text-gray-500' %>"></i> <%= code.likes %>
+                </div>
+              </div>
+              <a href="/code/view/<%= code._id %>" class="block mb-2">
+                <h3 class="text-2xl text-indigo-400 hover:text-indigo-300 font-bold transition-colors truncate" title="<%= code.title %>"><%= code.title %></h3>
+              </a>
+              <p class="text-gray-400 text-sm mb-3 h-16 overflow-hidden">
+                <%= code.description && code.description.length > 100 ? code.description.slice(0, 100) + '...' : code.description || 'Tidak ada deskripsi.' %>
+              </p>
+              <% if (code.tags && code.tags.length > 0) { %>
+                <div class="mb-3">
+                  <% code.tags.slice(0, 3).forEach(tag => { %>
+                    <a href="/?tag=<%=tag%>&search=<%= query.search || '' %>&language=<%= query.language || '' %>" class="tag-link"><i class="fas fa-tag mr-1"></i><%= tag %></a>
+                  <% }) %>
+                  <% if (code.tags.length > 3) { %>
+                     <span class="text-xs text-gray-500">+ <%= code.tags.length - 3 %> lainnya</span>
+                  <% } %>
+                </div>
+              <% } %>
+            </div>
+            <div class="mt-auto">
+              <div class="flex justify-between items-center text-xs text-gray-500 pt-3 border-t border-gray-700">
+                <span><i class="fas fa-user mr-1"></i> <%= code.author ? code.author.username : 'Anonim' %></span>
+                <span><i class="fas fa-calendar-alt mr-1"></i> <%= new Date(code.createdAt).toLocaleDateString('id-ID') %></span>
+              </div>
+              <% if (code.fileurl) { %>
+                <a href="<%= code.fileurl %>" target="_blank" rel="noopener noreferrer" class="mt-4 w-full flex items-center justify-center text-center text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 px-4 py-2.5 rounded-lg font-semibold transition-all duration-300 ease-in-out transform hover:scale-105 shadow-md">
+                  <i class="fas fa-download mr-2"></i> Download File (<%= code.filename ? code.filename.split('.').pop().toUpperCase() : 'FILE' %>)
+                </a>
+              <% } %>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+
+      <% if (lastPage > 1) { %>
+        <nav class="mt-12 flex justify-center space-x-2" aria-label="Pagination">
+          <% if (hasPreviousPage) { %>
+            <a href="?page=<%= previousPage %>&search=<%= query.search || '' %>&language=<%= query.language || '' %>&tag=<%= query.tag || '' %>" class="pagination-link"><i class="fas fa-chevron-left"></i></a>
+          <% } %>
+          <% for (let i = 1; i <= lastPage; i++) { %>
+            <% if (i === currentPage || (i <= 2) || (i >= lastPage - 1) || (i >= currentPage - 1 && i <= currentPage + 1)) { %>
+                 <a href="?page=<%= i %>&search=<%= query.search || '' %>&language=<%= query.language || '' %>&tag=<%= query.tag || '' %>" class="pagination-link <%= i === currentPage ? 'pagination-link-active' : '' %>"><%= i %></a>
+            <% } else if (i === currentPage - 2 || i === currentPage + 2) { %>
+                <span class="pagination-link">...</span>
+            <% } %>
+          <% } %>
+          <% if (hasNextPage) { %>
+            <a href="?page=<%= nextPage %>&search=<%= query.search || '' %>&language=<%= query.language || '' %>&tag=<%= query.tag || '' %>" class="pagination-link"><i class="fas fa-chevron-right"></i></a>
+          <% } %>
+        </nav>
+      <% } %>
+    <% } %>
+  </main>
+
+  <%- include('partials/_footer') %>
+</body>
+</html>

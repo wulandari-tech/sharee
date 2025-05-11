@@ -1,0 +1,93 @@
+<style>
+  .gradient-bg-navbar {
+    background: linear-gradient(90deg, rgba(29,78,216,1) 0%, rgba(30,64,175,1) 35%, rgba(79,70,229,1) 100%);
+  }
+  .nav-link {
+    @apply px-3 py-2 rounded-md text-sm font-medium text-indigo-100 hover:bg-indigo-700 hover:text-white transition-colors;
+  }
+  .nav-link-active {
+    @apply bg-indigo-700 text-white;
+  }
+</style>
+<nav class="gradient-bg-navbar shadow-lg sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between h-16">
+      <div class="flex items-center">
+        <a href="/" class="flex-shrink-0 text-white text-2xl font-bold tracking-wider">
+          🚀 SHARE<span class="text-indigo-300">CODE</span>
+        </a>
+        <div class="hidden md:block">
+          <div class="ml-10 flex items-baseline space-x-4">
+            <a href="/" class="nav-link <%= typeof title !== 'undefined' && title.startsWith('Beranda') ? 'nav-link-active' : '' %>">Beranda</a>
+            <% if (currentUser) { %>
+              <a href="/code/upload" class="nav-link <%= typeof title !== 'undefined' && title.startsWith('Upload') ? 'nav-link-active' : '' %>">Upload</a>
+              <a href="/code/my-snippets" class="nav-link <%= typeof title !== 'undefined' && title.startsWith('Snippet Saya') ? 'nav-link-active' : '' %>">Snippet Saya</a>
+            <% } %>
+          </div>
+        </div>
+      </div>
+      <div class="hidden md:block">
+        <div class="ml-4 flex items-center md:ml-6">
+          <% if (currentUser) { %>
+            <span class="text-indigo-200 mr-3">Halo, <%= currentUser.username %>!</span>
+            <a href="/auth/logout" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">Logout</a>
+          <% } else { %>
+            <a href="/auth/login" class="nav-link <%= typeof title !== 'undefined' && title.startsWith('Login') ? 'nav-link-active' : '' %>">Login</a>
+            <a href="/auth/register" class="ml-2 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">Register</a>
+          <% } %>
+        </div>
+      </div>
+      <div class="-mr-2 flex md:hidden">
+        <button type="button" id="mobile-menu-button" class="bg-indigo-800 inline-flex items-center justify-center p-2 rounded-md text-indigo-300 hover:text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-indigo-800 focus:ring-white" aria-controls="mobile-menu" aria-expanded="false">
+          <span class="sr-only">Open main menu</span>
+          <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+          <svg class="hidden h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="md:hidden hidden" id="mobile-menu">
+    <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+      <a href="/" class="nav-link block <%= typeof title !== 'undefined' && title.startsWith('Beranda') ? 'nav-link-active' : '' %>">Beranda</a>
+      <% if (currentUser) { %>
+        <a href="/code/upload" class="nav-link block <%= typeof title !== 'undefined' && title.startsWith('Upload') ? 'nav-link-active' : '' %>">Upload</a>
+        <a href="/code/my-snippets" class="nav-link block <%= typeof title !== 'undefined' && title.startsWith('Snippet Saya') ? 'nav-link-active' : '' %>">Snippet Saya</a>
+      <% } %>
+    </div>
+    <div class="pt-4 pb-3 border-t border-indigo-700">
+      <% if (currentUser) { %>
+        <div class="flex items-center px-5">
+          <div class="ml-3">
+            <div class="text-base font-medium leading-none text-white"><%= currentUser.username %></div>
+            <div class="text-sm font-medium leading-none text-indigo-300"><%= currentUser.email %></div>
+          </div>
+        </div>
+        <div class="mt-3 px-2 space-y-1">
+          <a href="/auth/logout" class="block px-3 py-2 rounded-md text-base font-medium text-indigo-300 hover:text-white hover:bg-indigo-700">Logout</a>
+        </div>
+      <% } else { %>
+        <div class="px-2 space-y-1">
+          <a href="/auth/login" class="block nav-link <%= typeof title !== 'undefined' && title.startsWith('Login') ? 'nav-link-active' : '' %>">Login</a>
+          <a href="/auth/register" class="block nav-link bg-green-500 hover:bg-green-600 text-white">Register</a>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</nav>
+<script>
+  const mobileMenuButton = document.getElementById('mobile-menu-button');
+  const mobileMenu = document.getElementById('mobile-menu');
+  if (mobileMenuButton && mobileMenu) {
+    mobileMenuButton.addEventListener('click', () => {
+      const expanded = mobileMenuButton.getAttribute('aria-expanded') === 'true' || false;
+      mobileMenuButton.setAttribute('aria-expanded', !expanded);
+      mobileMenu.classList.toggle('hidden');
+      mobileMenuButton.querySelectorAll('svg').forEach(svg => svg.classList.toggle('hidden'));
+    });
+  }
+</script>
